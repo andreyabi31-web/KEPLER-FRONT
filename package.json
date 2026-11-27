@@ -1,0 +1,8 @@
+{
+  "name": "kepler-front",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KEPLER FRONT: game FPS 3D berbasis fisika (HTML, JavaScript, three.js)",
+  "scripts": { "test": "node tests/run-all.js" },
+  "license": "MIT"
+}
