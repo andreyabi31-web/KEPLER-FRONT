@@ -1,0 +1,26 @@
+'use strict';
+// Harness uji: menjalankan skrip game apa adanya di dalam vm Node dengan mesin 3D tiruan.
+// Yang diuji adalah LOGIKA (fisika, AI, misi, multiplayer), bukan tampilan.
+const vm=require('vm'),fs=require('fs'),path=require('path');
+const mk=()=>{const st={};return new Proxy(function(){},{get(t,k){if(k===Symbol.toPrimitive)return()=>0;if(k==='then')return undefined;if(k in st)return st[k];if(k==='length'||k==='count'||k==='intensity')return 0;if(k==='children')return[];return st[k]=mk()},set(t,k,v){st[k]=v;return true},apply(){return mk()},construct(){return mk()}})};
+class V3{constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}set(x,y,z){this.x=x;this.y=y;this.z=z;return this}copy(a){this.x=a.x;this.y=a.y;this.z=a.z;return this}clone(){return new V3(this.x,this.y,this.z)}add(a){this.x+=a.x;this.y+=a.y;this.z+=a.z;return this}sub(a){this.x-=a.x;this.y-=a.y;this.z-=a.z;return this}addScaledVector(a,s){this.x+=a.x*s;this.y+=a.y*s;this.z+=a.z*s;return this}multiplyScalar(s){this.x*=s;this.y*=s;this.z*=s;return this}divideScalar(s){return this.multiplyScalar(1/s)}setScalar(s){return this.set(s,s,s)}setY(y){this.y=y;return this}length(){return Math.hypot(this.x,this.y,this.z)}lengthSq(){return this.x**2+this.y**2+this.z**2}normalize(){return this.multiplyScalar(1/(this.length()||1))}setLength(l){return this.normalize().multiplyScalar(l)}distanceTo(a){return Math.hypot(this.x-a.x,this.y-a.y,this.z-a.z)}dot(a){return this.x*a.x+this.y*a.y+this.z*a.z}lerp(a,t){this.x+=(a.x-this.x)*t;this.y+=(a.y-this.y)*t;this.z+=(a.z-this.z)*t;return this}project(){return this}}
+class GS{constructor(){this.position=new V3();this.rotation=mk();this.scale=mk();this.children=[];this.parent=null;this.userData={}}add(...c){c.forEach(o=>{if(o&&typeof o==='object'){o.parent=this;this.children.push(o)}})}remove(o){const i=this.children.indexOf(o);if(i>=0)this.children.splice(i,1)}lookAt(){}clone(){const g=new this.constructor();g.position.copy(this.position);return g}traverse(){}getWorldPosition(w){w.copy(this.position);if(this.parent&&this.parent.position)w.add(this.parent.position);return w}localToWorld(v){const w=v.clone().add(this.position);return this.parent&&this.parent.localToWorld?this.parent.localToWorld(w):w}updateMatrixWorld(){}}
+class MS extends GS{constructor(){super();this.material=mk();this.geometry=mk()}}
+class Cam extends GS{constructor(){super();this.fov=75;const c=this;this.rotation={x:0,y:0,z:0,set(x,y,z){c.rotation.x=x;c.rotation.y=y;c.rotation.z=z}}}
+ getWorldDirection(v){const x=this.rotation.x,y=this.rotation.y;return v.set(-Math.sin(y)*Math.cos(x),Math.sin(x),-Math.cos(y)*Math.cos(x))}
+ localToWorld(v){const x=this.rotation.x,y=this.rotation.y;let a=v.y*Math.cos(x)-v.z*Math.sin(x),b=v.y*Math.sin(x)+v.z*Math.cos(x);return new V3(v.x*Math.cos(y)+b*Math.sin(y)+this.position.x,a+this.position.y,-v.x*Math.sin(y)+b*Math.cos(y)+this.position.z)}
+ worldToLocal(v){return v.clone().sub(this.position)}updateProjectionMatrix(){}}
+const T=new Proxy({},{get(t,k){if(k==='Group')return GS;if(k==='Mesh'||k==='Line'||k==='Points'||k==='Sprite')return MS;if(k==='PerspectiveCamera')return Cam;if(k==='Vector3'||k==='Vector2')return V3;return function(){return mk()}}});
+class Net{constructor(){this.recs=new Map();this.n=0}
+ join(){const id='p'+(++this.n),rec={peer:id,presence:{},cb:[]},self=this;this.recs.set(id,rec);setImmediate(()=>this.notify());return{presence:async p=>{for(const k in p){if(p[k]===null)delete rec.presence[k];else rec.presence[k]=JSON.parse(JSON.stringify(p[k]))}self.notify()},peers:()=>[...self.recs.values()].map(r=>({peer:r.peer,isMe:r===rec,sameTab:r===rec,presence:JSON.parse(JSON.stringify(r.presence))})),onPeers:cb=>{rec.cb.push(cb)},leave:async()=>{self.recs.delete(id);self.notify()},name:'kf-test'}}
+ notify(){for(const r of this.recs.values())r.cb.forEach(cb=>{try{cb({})}catch(e){this.err=e}})}}
+function loadGame(opt={}){const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8'),js=html.split('<script>')[1].split('</script>')[0];
+ const vals={rc:'testroom',nm:opt.name||'Tes',df:String(opt.diff??1),rl:String(opt.role||0),tn:'',bs:'',ex:''},els={};let now=0;const store={};
+ const sb={THREE:T,claude:opt.net?{use:async()=>({join:async()=>opt.net.join()})}:undefined,devicePixelRatio:1,innerWidth:1280,innerHeight:720,requestAnimationFrame(){},setTimeout(){return 0},clearTimeout(){},setInterval(){return 0},addEventListener(){},
+  performance:{now:()=>now},localStorage:{getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=String(v)},removeItem:k=>{delete store[k]}},location:{reload(){}},AudioContext:function(){return mk()},
+  document:{getElementById:id=>els[id]||(els[id]=new Proxy(mk(),{get(t,k){if(k==='value')return vals[id]??'';if(k==='checked')return false;return t[k]},set(t,k,v){t[k]=v;return true}})),createElement:()=>mk(),body:mk(),head:mk(),addEventListener(){},exitPointerLock(){}}};
+ sb.window=sb;const ctx=vm.createContext(sb);vm.runInContext(js,ctx);
+ const run=c=>vm.runInContext(c,ctx),get=n=>run(n),set=(n,v)=>{sb.__v=v;run(n+'=__v')};
+ const stepFn=run('(function(dt,now){if(state==="play")upd(dt);if(MP){netTick(now);updGH(dt)}})');
+ return{ctx,run,get,set,store,step(dt=.016,n=1){for(let i=0;i<n;i++){now+=dt*1000;stepFn(dt,now)}},async start(){await run('$("mp").onclick()')}}}
+module.exports={loadGame,Net,V3};
